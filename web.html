@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ミニマル支出分類</title>
+    <!-- Tailwind CSSをCDNで読み込み、スタイリングを簡素化します -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f9f9f9; 
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex justify-center items-start min-h-screen">
+    <div class="w-full max-w-2xl bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100 mt-10">
+        
+        <!-- ヘッダー領域（タイトル＆言語切り替えボタン） -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 id="appTitle" class="text-2xl font-bold text-gray-800">ミニマル支出分類</h1>
+            <div class="flex gap-2">
+                <button id="btnJp" class="px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded border border-gray-800 transition-colors">
+                    JP
+                </button>
+                <button id="btnEn" class="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-600 text-xs font-bold rounded border border-gray-200 transition-colors">
+                    EN
+                </button>
+            </div>
+        </div>
+        
+        <!-- 入力領域 -->
+        <textarea id="inputText" class="w-full h-32 p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none mb-4 text-gray-700" placeholder="今日の支出を自由に入力してください。&#10;&#10;例：出勤時にスタバでコーヒー450円、お昼に豚骨ラーメン1200円、帰りにスーパーでシャンプー800円を買った。"></textarea>
+        
+        <!-- 実行ボタン -->
+        <button id="submitBtn" class="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors flex justify-center items-center h-12">
+            <span id="btnText">追加する</span>
+            <div id="loader" class="hidden animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+        </button>
+
+        <!-- 結果領域 -->
+        <div id="resultArea" class="mt-8 hidden space-y-6">
+            
+            <!-- 要約（合計）領域 -->
+            <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                <div class="flex justify-between items-end mb-4 pb-4 border-b border-gray-200">
+                    <span id="totalLabel" class="text-gray-600 font-medium">合計金額</span>
+                    <span id="grandTotal" class="text-2xl font-bold text-gray-900">¥ 0</span>
+                </div>
+                
+                <div>
+                    <h3 id="summaryLabel" class="text-sm font-bold text-gray-500 mb-2">カテゴリ別まとめ</h3>
+                    <div id="categorySummary" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                        <!-- JavaScriptでカテゴリ別の要約が追加されます -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 支出リストテーブル -->
+            <div>
+                <h2 id="detailLabel" class="text-lg font-bold mb-3 text-gray-800">詳細履歴</h2>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                            <tr>
+                                <th id="thItem" class="p-3 font-semibold text-sm w-1/3">項目</th>
+                                <th id="thAmount" class="p-3 font-semibold text-sm w-1/4">金額</th>
+                                <th id="thCategory" class="p-3 font-semibold text-sm w-1/4">カテゴリ</th>
+                                <th id="thAction" class="p-3 font-semibold text-sm w-auto text-center">管理</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- JavaScriptでデータがここに追加されます -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- カスタムトースト（通知）を表示するためのコンテナ -->
+    <div id="toastContainer" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        // API環境設定
+        const apiKey = ""; 
+        
+        // --- [ 多言語（i18n）対応設定 ] ---
+        let currentLang = 'jp'; // デフォルト言語
+        
+        const translations = {
+            jp: {
+                title: "ミニマル支出分類",
+                placeholder: "今日の支出を自由に入力してください。\n\n例：出勤時にスタバでコーヒー450円、お昼に豚骨ラーメン1200円、帰りにスーパーでシャンプー800円を買った。",
+                btnAdd: "追加する",
+                totalAmount: "合計金額",
+                categorySummary: "カテゴリ別まとめ",
+                detailList: "詳細履歴",
+                thItem: "項目",
+                thAmount: "金額",
+                thCategory: "カテゴリ",
+                thAction: "管理",
+                btnDelete: "削除",
+                uncategorized: "未分類",
+                msgEmpty: "支出内容を入力してください。",
+                msgNoData: "支出内容が見つかりませんでした。",
+                msgSuccess: "支出内容が追加されました。",
+                msgError: "分類中にエラーが発生しました。後でもう一度お試しください。",
+                msgDelete: "項目が削除されました。",
+                // 日本語プロンプト
+                sysPrompt: "あなたは支出分類アシスタントです。ユーザーの入力から支出項目、金額、カテゴリを抽出してください。金額は数字のみ。必ずカテゴリと項目名は日本語で記述してください。他の説明は含めず、データのみを提供してください。"
+            },
+            en: {
+                title: "Minimal Expense Tracker",
+                placeholder: "Feel free to write down your expenses today.\n\nEx: Starbucks coffee 450 yen, tonkotsu ramen 1200 yen for lunch, bought shampoo 800 yen at the mart on the way home.",
+                btnAdd: "Add Expense",
+                totalAmount: "Total Expenses",
+                categorySummary: "Category Summary",
+                detailList: "Details",
+                thItem: "Item",
+                thAmount: "Amount",
+                thCategory: "Category",
+                thAction: "Action",
+                btnDelete: "Delete",
+                uncategorized: "Uncategorized",
+                msgEmpty: "Please enter your expense details.",
+                msgNoData: "No expense details found.",
+                msgSuccess: "Expense added successfully.",
+                msgError: "An error occurred during classification. Please try again later.",
+                msgDelete: "Item deleted successfully.",
+                // 英語プロンプト
+                sysPrompt: "You are an expense classifier. Extract the expense item, amount, and category from the user's input. Amounts must be numbers only. Strictly write categories and item names in English. Provide only the data without any other explanation."
+            }
+        };
+
+        // データを蓄積するための配列
+        let allExpenses = [];
+        
+        // DOM要素の取得
+        const btnJp = document.getElementById('btnJp');
+        const btnEn = document.getElementById('btnEn');
+        const appTitle = document.getElementById('appTitle');
+        const totalLabel = document.getElementById('totalLabel');
+        const summaryLabel = document.getElementById('summaryLabel');
+        const detailLabel = document.getElementById('detailLabel');
+        const thItem = document.getElementById('thItem');
+        const thAmount = document.getElementById('thAmount');
+        const thCategory = document.getElementById('thCategory');
+        const thAction = document.getElementById('thAction');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        const inputText = document.getElementById('inputText');
+        const resultArea = document.getElementById('resultArea');
+        const tableBody = document.getElementById('tableBody');
+        const grandTotalEl = document.getElementById('grandTotal');
+        const categorySummaryEl = document.getElementById('categorySummary');
+
+        // 言語切り替え関数
+        function setLanguage(lang) {
+            currentLang = lang;
+            const t = translations[currentLang];
+            
+            appTitle.innerText = t.title;
+            inputText.placeholder = t.placeholder;
+            btnText.innerText = t.btnAdd;
+            totalLabel.innerText = t.totalAmount;
+            summaryLabel.innerText = t.categorySummary;
+            detailLabel.innerText = t.detailList;
+            thItem.innerText = t.thItem;
+            thAmount.innerText = t.thAmount;
+            thCategory.innerText = t.thCategory;
+            thAction.innerText = t.thAction;
+            
+            document.title = t.title;
+
+            // ボタンスタイルの更新
+            const activeClass = "px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded border border-gray-800 transition-colors";
+            const inactiveClass = "px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-600 text-xs font-bold rounded border border-gray-200 transition-colors";
+
+            if (lang === 'jp') {
+                btnJp.className = activeClass;
+                btnEn.className = inactiveClass;
+            } else {
+                btnEn.className = activeClass;
+                btnJp.className = inactiveClass;
+            }
+
+            // 既に画面にレンダリングされている削除ボタンなどの言語も更新するためにUIを再描画
+            updateUI(); 
+        }
+        
+        btnJp.addEventListener('click', () => setLanguage('jp'));
+        btnEn.addEventListener('click', () => setLanguage('en'));
+
+        // カスタム通知（Toast）関数
+        function showToast(message, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded shadow-lg text-white text-sm font-medium transition-opacity duration-300 ${isError ? 'bg-red-500' : 'bg-gray-800'}`;
+            toast.innerText = message;
+            
+            document.getElementById('toastContainer').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // 指数バックオフを適用したAPI呼び出し関数
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            for (let i = 0; i <= maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        throw new Error(`HTTPエラー: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (i === maxRetries) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delays[i]));
+                }
+            }
+        }
+
+        async function analyzeText() {
+            const text = inputText.value.trim();
+            const t = translations[currentLang];
+
+            if (!text) {
+                showToast(t.msgEmpty, true);
+                return;
+            }
+
+            // ローディング状態のUI処理
+            btnText.classList.add('hidden');
+            loader.classList.remove('hidden');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-80', 'cursor-not-allowed');
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                systemInstruction: {
+                    parts: [{ text: t.sysPrompt }] // 選択された言語に合わせたプロンプトを送信
+                },
+                contents: [
+                    { parts: [{ text: text }] }
+                ],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                item: { type: "STRING" },
+                                amount: { type: "INTEGER" },
+                                category: { type: "STRING" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            try {
+                const data = await fetchWithRetry(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (data.error) {
+                    throw new Error(data.error.message || "APIエラー");
+                }
+
+                // レスポンスからJSONテキストを抽出してパース
+                const jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                const newExpenses = JSON.parse(jsonString);
+
+                if (!newExpenses || newExpenses.length === 0) {
+                    showToast(t.msgNoData, true);
+                    return;
+                }
+
+                // 新しいデータに固有IDを付与し、全体リストに追加
+                newExpenses.forEach(exp => {
+                    allExpenses.push({
+                        ...exp,
+                        id: Date.now().toString(36) + Math.random().toString(36).substring(2, 9)
+                    });
+                });
+
+                inputText.value = ''; // 入力フィールドをクリア
+                updateUI(); // UI全体を更新
+                showToast(t.msgSuccess);
+
+            } catch (error) {
+                showToast(t.msgError, true);
+            } finally {
+                // ローディング状態を解除
+                btnText.classList.remove('hidden');
+                loader.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
+            }
+        }
+
+        // 特定の項目を削除する関数
+        window.deleteExpense = function(id) {
+            allExpenses = allExpenses.filter(exp => exp.id !== id);
+            const t = translations[currentLang];
+            updateUI();
+            showToast(t.msgDelete);
+        };
+
+        // データに基づいて画面（合計、テーブル）を再描画する関数
+        function updateUI() {
+            const t = translations[currentLang];
+
+            // データがない場合は領域を非表示にする
+            if (allExpenses.length === 0) {
+                resultArea.classList.add('hidden');
+                return;
+            }
+            
+            resultArea.classList.remove('hidden');
+            tableBody.innerHTML = '';
+            
+            let totalAmount = 0;
+            const categoryTotals = {};
+
+            // 1. テーブルの作成と金額の集計
+            allExpenses.forEach(exp => {
+                const amount = exp.amount || 0;
+                totalAmount += amount;
+                
+                // カテゴリ別の合計を累積（APIがカテゴリを返さなかった場合に備える）
+                const category = exp.category || t.uncategorized;
+                categoryTotals[category] = (categoryTotals[category] || 0) + amount;
+
+                // テーブルの行（Row）を作成
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors group';
+                
+                tr.innerHTML = `
+                    <td class="p-3 text-sm text-gray-800">${exp.item || '-'}</td>
+                    <td class="p-3 text-sm font-medium text-gray-800">¥ ${amount.toLocaleString()}</td>
+                    <td class="p-3 text-sm">
+                        <span class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md text-xs font-medium border border-gray-200">
+                            ${category}
+                        </span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteExpense('${exp.id}')" class="text-red-400 hover:text-red-600 font-medium text-sm px-2 py-1 rounded opacity-50 group-hover:opacity-100 transition-opacity">
+                            ${t.btnDelete}
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            // 2. 総合計のレンダリング
+            grandTotalEl.innerText = `¥ ${totalAmount.toLocaleString()}`;
+
+            // 3. カテゴリ別要約のレンダリング
+            categorySummaryEl.innerHTML = Object.entries(categoryTotals)
+                .sort((a, b) => b[1] - a[1]) // 金額が大きい順にソート
+                .map(([cat, amt]) => `
+                    <div class="flex justify-between items-center py-1 text-sm border-b border-gray-100 last:border-0 sm:border-none sm:pb-0">
+                        <span class="text-gray-600">${cat}</span>
+                        <span class="font-medium text-gray-800">¥ ${amt.toLocaleString()}</span>
+                    </div>
+                `).join('');
+        }
+
+        // イベントリスナーの登録
+        submitBtn.addEventListener('click', analyzeText);
+    </script>
+</body>
+</html>
