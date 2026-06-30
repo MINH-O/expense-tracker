@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ミニマル支出分類</title>
-    <!-- Tailwind CSSをCDNで読み込み、スタイリングを簡素化します -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { 
@@ -16,7 +15,6 @@
 <body class="p-4 md:p-8 flex justify-center items-start min-h-screen">
     <div class="w-full max-w-2xl bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100 mt-10">
         
-        <!-- ヘッダー領域（タイトル＆言語切り替えボタン） -->
         <div class="flex justify-between items-center mb-6">
             <h1 id="appTitle" class="text-2xl font-bold text-gray-800">ミニマル支出分類</h1>
             <div class="flex gap-2">
@@ -29,19 +27,15 @@
             </div>
         </div>
         
-        <!-- 入力領域 -->
         <textarea id="inputText" class="w-full h-32 p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none mb-4 text-gray-700" placeholder="今日の支出を自由に入力してください。&#10;&#10;例：出勤時にスタバでコーヒー450円、お昼に豚骨ラーメン1200円、帰りにスーパーでシャンプー800円を買った。"></textarea>
         
-        <!-- 実行ボタン -->
         <button id="submitBtn" class="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors flex justify-center items-center h-12">
             <span id="btnText">追加する</span>
             <div id="loader" class="hidden animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
         </button>
 
-        <!-- 結果領域 -->
         <div id="resultArea" class="mt-8 hidden space-y-6">
             
-            <!-- 要約（合計）領域 -->
             <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
                 <div class="flex justify-between items-end mb-4 pb-4 border-b border-gray-200">
                     <span id="totalLabel" class="text-gray-600 font-medium">合計金額</span>
@@ -51,12 +45,10 @@
                 <div>
                     <h3 id="summaryLabel" class="text-sm font-bold text-gray-500 mb-2">カテゴリ別まとめ</h3>
                     <div id="categorySummary" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                        <!-- JavaScriptでカテゴリ別の要約が追加されます -->
-                    </div>
+                        </div>
                 </div>
             </div>
 
-            <!-- 支出リストテーブル -->
             <div>
                 <h2 id="detailLabel" class="text-lg font-bold mb-3 text-gray-800">詳細履歴</h2>
                 <div class="overflow-x-auto border border-gray-200 rounded-lg">
@@ -70,8 +62,7 @@
                             </tr>
                         </thead>
                         <tbody id="tableBody">
-                            <!-- JavaScriptでデータがここに追加されます -->
-                        </tbody>
+                            </tbody>
                     </table>
                 </div>
             </div>
@@ -79,7 +70,6 @@
         </div>
     </div>
 
-    <!-- カスタムトースト（通知）を表示するためのコンテナ -->
     <div id="toastContainer" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2"></div>
 
     <script>
@@ -327,53 +317,85 @@
             }
             
             resultArea.classList.remove('hidden');
+            
+            // 既存の内容を安全にクリアします。
             tableBody.innerHTML = '';
+            categorySummaryEl.innerHTML = '';
             
             let totalAmount = 0;
             const categoryTotals = {};
 
-            // 1. テーブルの作成と金額の集計
+            // 1. テーブルの作成と金額の集計 (XSS対策適用)
             allExpenses.forEach(exp => {
                 const amount = exp.amount || 0;
                 totalAmount += amount;
                 
-                // カテゴリ別の合計を累積（APIがカテゴリを返さなかった場合に備える）
                 const category = exp.category || t.uncategorized;
                 categoryTotals[category] = (categoryTotals[category] || 0) + amount;
 
-                // テーブルの行（Row）を作成
+                // 行(tr)要素の生成
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors group';
                 
-                tr.innerHTML = `
-                    <td class="p-3 text-sm text-gray-800">${exp.item || '-'}</td>
-                    <td class="p-3 text-sm font-medium text-gray-800">¥ ${amount.toLocaleString()}</td>
-                    <td class="p-3 text-sm">
-                        <span class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md text-xs font-medium border border-gray-200">
-                            ${category}
-                        </span>
-                    </td>
-                    <td class="p-3 text-center">
-                        <button onclick="deleteExpense('${exp.id}')" class="text-red-400 hover:text-red-600 font-medium text-sm px-2 py-1 rounded opacity-50 group-hover:opacity-100 transition-opacity">
-                            ${t.btnDelete}
-                        </button>
-                    </td>
-                `;
+                // 項目(Item)セル - textContentで安全に文字列を挿入
+                const tdItem = document.createElement('td');
+                tdItem.className = 'p-3 text-sm text-gray-800';
+                tdItem.textContent = exp.item || '-';
+                
+                // 金額(Amount)セル
+                const tdAmount = document.createElement('td');
+                tdAmount.className = 'p-3 text-sm font-medium text-gray-800';
+                tdAmount.textContent = `¥ ${amount.toLocaleString()}`;
+                
+                // カテゴリ(Category)セル - 内部にspan要素を生成して追加
+                const tdCategory = document.createElement('td');
+                tdCategory.className = 'p-3 text-sm';
+                const spanCategory = document.createElement('span');
+                spanCategory.className = 'bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md text-xs font-medium border border-gray-200';
+                spanCategory.textContent = category; // textContentを使用
+                tdCategory.appendChild(spanCategory);
+                
+                // 管理(Action)セル - ボタンオブジェクトを生成しイベントを直接バインド
+                const tdAction = document.createElement('td');
+                tdAction.className = 'p-3 text-center';
+                const btnDelete = document.createElement('button');
+                btnDelete.className = 'text-red-400 hover:text-red-600 font-medium text-sm px-2 py-1 rounded opacity-50 group-hover:opacity-100 transition-opacity';
+                btnDelete.textContent = t.btnDelete;
+                btnDelete.onclick = () => deleteExpense(exp.id); // インラインonclick文字列の代わりに関数参照を割り当て
+                tdAction.appendChild(btnDelete);
+                
+                // 生成された各セルを行に追加
+                tr.appendChild(tdItem);
+                tr.appendChild(tdAmount);
+                tr.appendChild(tdCategory);
+                tr.appendChild(tdAction);
+                
+                // 最終的にテーブルの本文に行を追加
                 tableBody.appendChild(tr);
             });
 
-            // 2. 総合計のレンダリング
+            // 2. 総合計のレンダリング (innerText/textContentは安全)
             grandTotalEl.innerText = `¥ ${totalAmount.toLocaleString()}`;
 
-            // 3. カテゴリ別要約のレンダリング
-            categorySummaryEl.innerHTML = Object.entries(categoryTotals)
+            // 3. カテゴリ別要約のレンダリング (XSS対策適用)
+            Object.entries(categoryTotals)
                 .sort((a, b) => b[1] - a[1]) // 金額が大きい順にソート
-                .map(([cat, amt]) => `
-                    <div class="flex justify-between items-center py-1 text-sm border-b border-gray-100 last:border-0 sm:border-none sm:pb-0">
-                        <span class="text-gray-600">${cat}</span>
-                        <span class="font-medium text-gray-800">¥ ${amt.toLocaleString()}</span>
-                    </div>
-                `).join('');
+                .forEach(([cat, amt]) => {
+                    const summaryDiv = document.createElement('div');
+                    summaryDiv.className = 'flex justify-between items-center py-1 text-sm border-b border-gray-100 last:border-0 sm:border-none sm:pb-0';
+                    
+                    const catSpan = document.createElement('span');
+                    catSpan.className = 'text-gray-600';
+                    catSpan.textContent = cat;
+                    
+                    const amtSpan = document.createElement('span');
+                    amtSpan.className = 'font-medium text-gray-800';
+                    amtSpan.textContent = `¥ ${amt.toLocaleString()}`;
+                    
+                    summaryDiv.appendChild(catSpan);
+                    summaryDiv.appendChild(amtSpan);
+                    categorySummaryEl.appendChild(summaryDiv);
+                });
         }
 
         // イベントリスナーの登録
